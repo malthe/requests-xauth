@@ -53,6 +53,8 @@ settings.update(
         'Programming Language :: Python :: 2.7',
     ),
     zip_safe=False,
+    tests_require=['mock'],
+    test_suite='tests'
 )
 
 setup(**settings)
