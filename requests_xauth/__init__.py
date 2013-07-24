@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+__version__ = '1.0'
+
 import hashlib
 import hmac
 import requests
@@ -36,22 +39,24 @@ def compute_footprint(method, url, datas):
     else:
         url = parsed.path
     if len(datas) > 0:
-        datas = [(key, utf8(datas[key])) \
-            for key in sorted(datas.keys())]
+        datas = (
+            (key, utf8(datas[key]))
+            for key in sorted(datas.keys())
+        )
+
     return "%s&%s&%s" % (method.upper(), url, urlencode(datas))
 
 
-def compute_signature(secret, method, url, datas={},
-        digestmod=hashlib.sha256):
+def compute_signature(secret, method, url, data, digestmod):
     """Computes an hmac signature from request payload.
 
     :param secret: The secret key.
     :param method: The Http method.
     :param url: The ressource url.
-    :param datas: The request datas.
+    :param data: The request datas.
     :param digestmod: The digest algorhythm.
     """
-    footprint = compute_footprint(method, url, datas)
+    footprint = compute_footprint(method, url, data)
     h = hmac.new(secret, digestmod=digestmod)
     h.update(footprint)
     return h.hexdigest()
@@ -64,8 +69,8 @@ class Client(object):
     CONSUMER_ID_HEADER = CONSUMER_ID_HEADER
 
     def __init__(self, api_url, token_url, consumer_id=None,
-            consumer_secret=None, token_id=None, token_secret=None,
-            digestmod=hashlib.sha256):
+                 consumer_secret='', token_id=None, token_secret='',
+                 digestmod=hashlib.sha256):
         """Initializes a new XAuth client.
 
         :param api_url: The Api base url.
@@ -110,12 +115,13 @@ class Client(object):
         if self.consumer_id is not None:
             r.headers[self.CONSUMER_ID_HEADER] = self.consumer_id
         #  Signature
-        if self.consumer_secret is not None or self.token_secret is not None:
-            secret = self.token_secret if self.token_secret is not None else ''
+        if self.consumer_secret or self.token_secret:
+            secret = str(self.token_secret)
             if self.consumer_secret:
-                secret += self.consumer_secret
-            r.headers[self.SIGNATURE_HEADER] = compute_signature(str(secret), method,
-                r.url, kwargs.get('data', {}), self.digestmod)
+                secret += str(self.consumer_secret)
+            data = kwargs.get('data', {})
+            s = compute_signature(secret, method, r.url, data, self.digestmod)
+            r.headers[self.SIGNATURE_HEADER] = s
 
         s = requests.Session()
         return s.send(r, verify=False)
@@ -128,4 +134,4 @@ class Client(object):
         if self.TOKEN_ID_HEADER in headers and \
                 self.TOKEN_SECRET_HEADER in headers:
             self.token_id = headers.get(self.TOKEN_ID_HEADER)
-            self.token_secret = headers.get(self.TOKEN_SECRET_HEADER)
+            self.token_secret = headers.get(self.TOKEN_SECRET_HEADER, '')
